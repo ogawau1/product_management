@@ -5,28 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Company;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 
 class ProductController extends Controller
 {
    
     public function index(Request $request)
     {
-        $query = Product::query();
-
-        if($search = $request->search){
-            $query->where('product_name', 'LIKE', "%{$search}%");
-        }
-        
-        if ($company_id = $request->company_id) {
-            $query->where('company_id', $company_id);
-        }
-
-        $products = $query->paginate(10)->appends($request->all());
-
+        $products = Product::filter($request)->paginate(10)->appends($request->all());
         return view('products.index', ['products' => $products, 'companies' => Company::all()]);
     }
-    
-    
+
     public function create()
     {
         $companies = Company::all();
@@ -36,33 +25,36 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        try {
+            $request->validate([
+                'product_name' => 'required',
+                'company_id' => 'required',
+                'price' => 'required',
+                'stock' => 'required',
+                'comment' => 'nullable',
+                'img_path' => 'nullable|image|max:2048',
+            ]);
 
-        $request->validate([
-            'product_name' => 'required',
-            'company_id' => 'required',
-            'price' => 'required',
-            'stock' => 'required',
-            'comment' => 'nullable',
-            'img_path' => 'nullable|image|max:2048',
-        ]);
+            $product = new Product([
+                'product_name' => $request->get('product_name'),
+                'company_id' => $request->get('company_id'),
+                'price' => $request->get('price'),
+                'stock' => $request->get('stock'),
+                'comment' => $request->get('comment'),
+            ]);
 
-        $product = new Product([
-            'product_name' => $request->get('product_name'),
-            'company_id' => $request->get('company_id'),
-            'price' => $request->get('price'),
-            'stock' => $request->get('stock'),
-            'comment' => $request->get('comment'),
-        ]);
+            if($request->hasFile('img_path')){ 
+                $filename = $request->img_path->getClientOriginalName();
+                $filePath = $request->img_path->storeAs('products', $filename, 'public');
+                $product->img_path = '/storage/' . $filePath;
+            }
 
-        if($request->hasFile('img_path')){ 
-            $filename = $request->img_path->getClientOriginalName();
-            $filePath = $request->img_path->storeAs('products', $filename, 'public');
-            $product->img_path = '/storage/' . $filePath;
+            $product->save();
+
+            return redirect('products')->with('success', 'Product created successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()->withInput()->withErrors(['error' => 'Failed to create product.']);
         }
-
-        $product->save();
-
-        return redirect('products');
     }
 
     public function show(Product $product)
@@ -80,42 +72,46 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
-        $request->validate([
-            'product_name' => 'required',
-            'price' => 'required',
-            'stock' => 'required',
-            'comment' => 'nullable',
-            'img_path' => 'nullable|image|max:2048',
-            'company_id' => 'required',
-        ]);
-    
-        $product->update([
-            'product_name' => $request->product_name,
-            'price' => $request->price,
-            'stock' => $request->stock,
-            'comment' => $request->comment,
-            'company_id' => $request->company_id,
-        ]);
-    
-        if ($request->hasFile('img_path')) {
-            $filename = $request->img_path->getClientOriginalName();
-            $filePath = $request->img_path->storeAs('products', $filename, 'public');
-            $product->img_path = '/storage/' . $filePath;
-            $product->save();
+        try {
+            $request->validate([
+                'product_name' => 'required',
+                'price' => 'required',
+                'stock' => 'required',
+                'comment' => 'nullable',
+                'img_path' => 'nullable|image|max:2048',
+                'company_id' => 'required',
+            ]);
+
+            $product->update([
+                'product_name' => $request->product_name,
+                'price' => $request->price,
+                'stock' => $request->stock,
+                'comment' => $request->comment,
+                'company_id' => $request->company_id,
+            ]);
+
+            if ($request->hasFile('img_path')) {
+                $filename = $request->img_path->getClientOriginalName();
+                $filePath = $request->img_path->storeAs('products', $filename, 'public');
+                $product->img_path = '/storage/' . $filePath;
+                $product->save();
+            }
+
+            return redirect()->route('products.index')->with('success', 'Product updated successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()->withInput()->withErrors(['error' => 'Failed to update product.']);
         }
-    
-        return redirect()->route('products.index')
-            ->with('success', 'Product updated successfully');
     }
     
 
     public function destroy(Product $product)
     {
-        $product->delete();
-
-        return redirect('/products');
-
+        try {
+            $product->delete();
+            return redirect('/products')->with('success', 'Product deleted successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['error' => 'Failed to delete product.']);
+        }
     }
 
 }
-

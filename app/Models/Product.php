@@ -23,11 +23,21 @@ class Product extends Model
         return $this->hasMany(Sale::class);
     }
 
+    public function scopeFilter($query, $request)
+    {
+        if ($search = $request->search) {
+            $query->where('product_name', 'LIKE', "%{$search}%");
+        }
+
+        if ($company_id = $request->company_id) {
+            $query->where('company_id', $company_id);
+        }
+
+        return $query;
+    }
+
     public function company()
     {
         return $this->belongsTo(Company::class);
     }
 }
-
-
-
